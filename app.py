@@ -2,7 +2,6 @@ from flask import Flask, render_template, request, jsonify
 import pandas as pd
 import numpy as np
 import joblib
-import time
 import os
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
@@ -14,38 +13,45 @@ app = Flask(__name__)
 
 # -------------------- تنظیمات کلی --------------------
 MODEL_PATHS = {
-    '1': 'breast_cancer.csv',
-    '2': 'diabetes.csv',
-    '3': 'Heart_disease_cleveland_new.csv'
+    'breast': 'breast_cancer.csv',
+    'diabetes': 'diabetes.csv',
+    'heart': 'Heart_disease_cleveland_new.csv'
 }
 
-MODEL_PREFIXES = {
-    '1': 'breast_model_',
-    '2': 'diabetes_model_',
-    '3': 'heart_model_'
+MODEL_FILES = {
+    'breast': 'models/breast_model.pkl',
+    'diabetes': 'models/diabetes_model.pkl',
+    'heart': 'models/heart_model.pkl'
 }
+
+# ایجاد پوشه models اگر وجود ندارد
+os.makedirs('models', exist_ok=True)
 
 # -------------------- توابع عمومی --------------------
-@app.route('/')
-def home():
-    return render_template('index.html')
+def load_model(model_type):
+    """بارگذاری مدل از فایل ذخیره شده"""
+    model_file = MODEL_FILES[model_type]
+    if os.path.exists(model_file):
+        return joblib.load(model_file)
+    return None
 
 # -------------------- ماژول سرطان پستان --------------------
 def breast_cancer_load_data():
     try:
-        df = pd.read_csv(MODEL_PATHS['1'])
+        df = pd.read_csv(MODEL_PATHS['breast'])
         df = df.drop(columns=['id', 'Unnamed: 32'], errors='ignore')
         df['diagnosis'] = df['diagnosis'].map({'M': 0, 'B': 1})
         numeric_cols = df.select_dtypes(include=np.number).columns
         df = df.dropna(subset=numeric_cols)
         return df, [col for col in df.columns if col != 'diagnosis']
     except Exception as e:
+        print(f"Error loading breast cancer data: {str(e)}")
         return None, str(e)
 
 def breast_cancer_train():
     df, feature_names = breast_cancer_load_data()
     if df is None:
-        return {'error': feature_names}  # feature_names contains error message here
+        return {'error': feature_names}
     
     X = df.drop('diagnosis', axis=1)
     y = df['diagnosis']
@@ -66,7 +72,6 @@ def breast_cancer_train():
     y_pred = model.predict(X_test)
     accuracy = accuracy_score(y_test, y_pred)
     
-    timestamp = time.strftime("%Y%m%d-%H%M%S")
     model_data = {
         'model': model,
         'scaler': scaler,
@@ -75,13 +80,15 @@ def breast_cancer_train():
             'accuracy': accuracy
         }
     }
-    joblib.dump(model_data, f"{MODEL_PREFIXES['1']}{timestamp}.pkl")
+    
+    # ذخیره مدل
+    joblib.dump(model_data, MODEL_FILES['breast'])
     return model_data
 
 # -------------------- ماژول دیابت --------------------
 def diabetes_load_data():
     try:
-        data = pd.read_csv(MODEL_PATHS['2'])
+        data = pd.read_csv(MODEL_PATHS['diabetes'])
         cols_to_replace_zero = ['Glucose', 'BloodPressure', 'SkinThickness', 'Insulin', 'BMI']
         data[cols_to_replace_zero] = data[cols_to_replace_zero].replace(0, np.nan)
         data.fillna(data.median(), inplace=True)
@@ -118,7 +125,6 @@ def diabetes_train():
     y_pred = model.predict(X_test_scaled)
     accuracy = accuracy_score(y_test, y_pred)
     
-    timestamp = time.strftime("%Y%m%d-%H%M%S")
     model_data = {
         'model': model,
         'scaler': scaler,
@@ -127,16 +133,18 @@ def diabetes_train():
             'accuracy': accuracy
         }
     }
-    joblib.dump(model_data, f"{MODEL_PREFIXES['2']}{timestamp}.pkl")
+    
+    # ذخیره مدل
+    joblib.dump(model_data, MODEL_FILES['diabetes'])
     return model_data
 
 # -------------------- ماژول بیماری قلبی --------------------
 def heart_load_data():
     try:
-        df = pd.read_csv(MODEL_PATHS['3'], na_values=['?', ' ', 'NA', ''])
+        df = pd.read_csv(MODEL_PATHS['heart'], na_values=['?', ' ', 'NA', ''])
     except:
         try:
-            df = pd.read_csv(MODEL_PATHS['3'], names=[
+            df = pd.read_csv(MODEL_PATHS['heart'], names=[
                 'age', 'sex', 'cp', 'trestbps', 'chol', 'fbs', 'restecg',
                 'thalach', 'exang', 'oldpeak', 'slope', 'ca', 'thal', 'target'
             ], na_values=['?', ' ', 'NA', ''])
@@ -172,7 +180,6 @@ def heart_train():
     y_pred = model.predict(X_test)
     accuracy = accuracy_score(y_test, y_pred)
     
-    timestamp = time.strftime("%Y%m%d-%H%M%S")
     model_data = {
         'model': model,
         'scaler': scaler,
@@ -181,123 +188,87 @@ def heart_train():
             'accuracy': accuracy
         }
     }
-    joblib.dump(model_data, f"{MODEL_PREFIXES['3']}{timestamp}.pkl")
+    
+    # ذخیره مدل
+    joblib.dump(model_data, MODEL_FILES['heart'])
     return model_data
 
 # -------------------- توابع پیش‌بینی --------------------
-def predict(model_prefix, input_data, feature_names):
+def make_prediction(model_type, input_data):
+    model_data = load_model(model_type)
+    if not model_data:
+        return {'error': 'مدل آموزش داده نشده است. لطفاً ابتدا مدل را آموزش دهید.'}
+    
     try:
-        model_files = [f for f in os.listdir() if f.startswith(model_prefix)]
-        if not model_files:
-            return {'error': 'مدلی یافت نشد. ابتدا مدل را آموزش دهید'}
+        # ایجاد DataFrame از داده‌های ورودی
+        input_df = pd.DataFrame([input_data], columns=model_data['features'])
         
-        latest_model = sorted(model_files)[-1]
-        model_data = joblib.load(latest_model)
-        
-        input_df = pd.DataFrame([input_data], columns=feature_names)
+        # استانداردسازی داده‌های ورودی
         scaled_input = model_data['scaler'].transform(input_df)
+        
+        # پیش‌بینی احتمال
         proba = model_data['model'].predict_proba(scaled_input)[0][1]
         
         return {'probability': proba}
     except Exception as e:
         return {'error': str(e)}
 
-# -------------------- مسیرهای API --------------------
-@app.route('/train/<model_type>', methods=['POST'])
-def train_model(model_type):
-    if model_type == 'breast':
-        result = breast_cancer_train()
-    elif model_type == 'diabetes':
-        result = diabetes_train()
-    elif model_type == 'heart':
-        result = heart_train()
-    else:
-        return jsonify({'error': 'نوع مدل نامعتبر'}), 400
+# -------------------- مسیرهای اصلی --------------------
+@app.route('/')
+def home():
+    return render_template('index.html')
+
+@app.route('/train')
+def train_page():
+    return render_template('train.html')
+
+# -------------------- API برای پیش‌بینی --------------------
+@app.route('/predict/<model_type>', methods=['POST'])
+def predict_model(model_type):
+    if model_type not in MODEL_FILES:
+        return jsonify({'error': 'نوع مدل نامعتبر است'}), 400
+    
+    input_data = request.json
+    result = make_prediction(model_type, input_data)
     
     if 'error' in result:
-        return jsonify(result), 500
+        return jsonify(result), 400
+    
+    # تعیین تشخیص بر اساس نوع مدل
+    proba = result['probability']
+    if model_type == 'breast':
+        diagnosis = 'خوش‌خیم' if proba >= 0.5 else 'بدخیم'
+    elif model_type == 'diabetes':
+        diagnosis = 'مثبت' if proba >= 0.5 else 'منفی'
+    elif model_type == 'heart':
+        diagnosis = 'در معرض خطر' if proba >= 0.5 else 'سالم'
     
     return jsonify({
-        'message': 'مدل با موفقیت آموزش داده شد',
-        'accuracy': result['performance']['accuracy']
+        'diagnosis': diagnosis,
+        'probability': proba,
+        'threshold': 0.5
     })
 
-@app.route('/predict/breast', methods=['POST'])
-def predict_breast():
+# -------------------- API برای آموزش مدل --------------------
+@app.route('/api/train/<model_type>', methods=['POST'])
+def train_model(model_type):
+    if model_type not in MODEL_FILES:
+        return jsonify({'error': 'نوع مدل نامعتبر است'}), 400
+    
     try:
-        df, feature_names = breast_cancer_load_data()
-        if df is None:
-            return jsonify({'error': feature_names}), 500
+        if model_type == 'breast':
+            model_data = breast_cancer_train()
+        elif model_type == 'diabetes':
+            model_data = diabetes_train()
+        elif model_type == 'heart':
+            model_data = heart_train()
         
-        input_data = request.json
-        result = predict(MODEL_PREFIXES['1'], input_data, feature_names)
+        if 'error' in model_data:
+            return jsonify({'error': model_data['error']}), 500
         
-        if 'error' in result:
-            return jsonify(result), 500
-        
-        diagnosis = 'خوش‌خیم' if result['probability'] >= 0.5 else 'بدخیم'
         return jsonify({
-            'diagnosis': diagnosis,
-            'probability': result['probability'],
-            'threshold': 0.5
-        })
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/predict/diabetes', methods=['POST'])
-def predict_diabetes():
-    try:
-        _, error = diabetes_load_data()
-        if error:
-            return jsonify({'error': error}), 500
-        
-        input_data = request.json
-        model_files = [f for f in os.listdir() if f.startswith(MODEL_PREFIXES['2'])]
-        if not model_files:
-            return jsonify({'error': 'مدلی یافت نشد. ابتدا مدل را آموزش دهید'}), 400
-        
-        latest_model = sorted(model_files)[-1]
-        model_data = joblib.load(latest_model)
-        
-        result = predict(MODEL_PREFIXES['2'], input_data, model_data['features'])
-        
-        if 'error' in result:
-            return jsonify(result), 500
-        
-        diagnosis = 'مثبت' if result['probability'] >= 0.5 else 'منفی'
-        return jsonify({
-            'diagnosis': diagnosis,
-            'probability': result['probability'],
-            'threshold': 0.5
-        })
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/predict/heart', methods=['POST'])
-def predict_heart():
-    try:
-        _, error = heart_load_data()
-        if error:
-            return jsonify({'error': error}), 500
-        
-        input_data = request.json
-        model_files = [f for f in os.listdir() if f.startswith(MODEL_PREFIXES['3'])]
-        if not model_files:
-            return jsonify({'error': 'مدلی یافت نشد. ابتدا مدل را آموزش دهید'}), 400
-        
-        latest_model = sorted(model_files)[-1]
-        model_data = joblib.load(latest_model)
-        
-        result = predict(MODEL_PREFIXES['3'], input_data, model_data['features'])
-        
-        if 'error' in result:
-            return jsonify(result), 500
-        
-        diagnosis = 'در معرض خطر' if result['probability'] >= 0.5 else 'سالم'
-        return jsonify({
-            'diagnosis': diagnosis,
-            'probability': result['probability'],
-            'threshold': 0.5
+            'message': 'مدل با موفقیت آموزش داده شد',
+            'accuracy': model_data['performance']['accuracy']
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 500

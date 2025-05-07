@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>سیستم تشخیص پزشکی - آموزش مدل</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/font.css" rel="stylesheet">
+    <style>
+        body {
+            font-family: Vazirmatn, sans-serif;
+            background-color: #f8f9fa;
+        }
+        .card {
+            margin-top: 30px;
+        }
+        .model-card {
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .model-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+        }
+        .result-box {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 5px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container">
+            <a class="navbar-brand" href="/">سیستم تشخیص پزشکی</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/">پیش‌بینی</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" href="/train">آموزش مدل</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-md-8">
+                <div class="card shadow">
+                    <div class="card-header bg-primary text-white">
+                        <h2 class="text-center">آموزش مدل‌های تشخیص پزشکی</h2>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted">برای آموزش مدل مورد نظر، روی آن کلیک کنید. مدل آموزش دیده جایگزین مدل قبلی خواهد شد.</p>
+                        
+                        <div class="row">
+                            <!-- مدل سرطان پستان -->
+                            <div class="col-md-4 mb-4">
+                                <div class="card model-card h-100" onclick="trainModel('breast')">
+                                    <div class="card-body text-center">
+                                        <h5 class="card-title">سرطان پستان</h5>
+                                        <p class="card-text">مدل تشخیص سرطان پستان بر اساس ویژگی‌های تومور</p>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- مدل دیابت -->
+                            <div class="col-md-4 mb-4">
+                                <div class="card model-card h-100" onclick="trainModel('diabetes')">
+                                    <div class="card-body text-center">
+                                        <h5 class="card-title">دیابت</h5>
+                                        <p class="card-text">مدل تشخیص دیابت بر اساس ویژگی‌های بیمار</p>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- مدل بیماری قلبی -->
+                            <div class="col-md-4 mb-4">
+                                <div class="card model-card h-100" onclick="trainModel('heart')">
+                                    <div class="card-body text-center">
+                                        <h5 class="card-title">بیماری قلبی</h5>
+                                        <p class="card-text">مدل تشخیص بیماری قلبی بر اساس ویژگی‌های بالینی</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div id="train-result" class="result-box alert"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // آموزش مدل
+        function trainModel(modelType) {
+            const resultDiv = document.getElementById('train-result');
+            resultDiv.style.display = 'none';
+            
+            fetch(`/api/train/${modelType}`, {
+                method: 'POST'
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('خطا در ارتباط با سرور');
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.error) {
+                    resultDiv.className = 'alert-danger';
+                    resultDiv.innerHTML = `<strong>خطا:</strong> ${data.error}`;
+                } else {
+                    resultDiv.className = 'alert-success';
+                    resultDiv.innerHTML = `
+                        <strong>موفقیت:</strong> ${data.message}<br>
+                        <strong>دقت مدل:</strong> ${(data.accuracy * 100).toFixed(2)}%
+                    `;
+                }
+                resultDiv.style.display = 'block';
+            })
+            .catch(error => {
+                resultDiv.className = 'alert-danger';
+                resultDiv.innerHTML = `<strong>خطا:</strong> ${error.message}`;
+                resultDiv.style.display = 'block';
+            });
+        }
+    </script>
+</body>
+</html>
