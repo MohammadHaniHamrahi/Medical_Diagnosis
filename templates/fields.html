@@ -1,0 +1,20 @@
+{% for feature in features %}
+<div class="mb-3">
+    <label class="form-label">
+        {{ FEATURE_TRANSLATIONS.get(feature, {'fa_name': feature})['fa_name'] }}
+        {% if FEATURE_TRANSLATIONS.get(feature, {}).range %}
+        <span class="feature-range">(محدوده مجاز: {{ FEATURE_TRANSLATIONS[feature].range }})</span>
+        {% endif %}
+    </label>
+    <input 
+        type="number" 
+        step="any" 
+        name="{{ feature }}" 
+        class="form-control" 
+        required
+        {% if FEATURE_TRANSLATIONS.get(feature, {}).example %} 
+        placeholder="مثال: {{ FEATURE_TRANSLATIONS[feature].example }}"
+        {% endif %}
+    >
+</div>
+{% endfor %}

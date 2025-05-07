@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card shadow-lg border-0">
+    <div class="card-header bg-primary text-white py-3">
+        <h3 class="mb-0"><i class="bi bi-heart-pulse me-2"></i>سامانه هوشمند تشخیص پزشکی</h3>
+    </div>
+    
+    <div class="card-body p-4">
+        <!-- نمایش نتایج -->
+        {% if result %}
+        <div class="alert alert-success mb-4">
+            <div class="d-flex align-items-center">
+                <i class="bi bi-clipboard2-check fs-2 me-3"></i>
+                <div>
+                    <h4 class="alert-heading mb-2">{{ result.diagnosis }}</h4>
+                    <p class="mb-0">احتمال تشخیص: {{ result.probability }}%</p>
+                </div>
+            </div>
+            
+            <hr>
+            
+            <h5 class="mt-4 mb-3"><i class="bi bi-input-cursor-text me-2"></i>مقادیر ورودی:</h5>
+            <div class="row g-3">
+                {% for name, value in result.inputs.items() %}
+                <div class="col-md-4">
+                    <div class="bg-light p-3 rounded-3 border">
+                        <div class="d-flex justify-content-between">
+                            <span class="text-muted small">{{ FEATURE_TRANSLATIONS[name]['fa_name'] }}:</span>
+                            <strong class="text-primary">{{ value }}</strong>
+                        </div>
+                        {% if FEATURE_TRANSLATIONS[name].range %}
+                        <div class="mt-1">
+                            <small class="text-muted">
+                                <i class="bi bi-info-circle me-1"></i>
+                                محدوده: {{ FEATURE_TRANSLATIONS[name].range }}
+                            </small>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- فرم تشخیص -->
+        <div class="card border-primary">
+            <div class="card-body">
+                <form method="POST" class="needs-validation" novalidate>
+                    <div class="row g-4">
+                        <!-- انتخاب مدل -->
+                        <div class="col-12">
+                            <label class="form-label fs-5 text-primary">
+                                <i class="bi bi-clipboard-data me-2"></i>
+                                انتخاب نوع تشخیص:
+                            </label>
+                            <select name="model_type" 
+                                    class="form-select form-select-lg" 
+                                    id="model-select" 
+                                    required>
+                                {% for id, name in MODEL_NAMES.items() %}
+                                <option value="{{ id }}">{{ name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <!-- فیلدهای پویا -->
+                        <div class="col-12" id="input-fields">
+                            <div class="text-center my-5 py-3">
+                                <div class="spinner-border text-primary" style="width: 3rem; height: 3rem;" role="status">
+                                    <span class="visually-hidden">در حال بارگیری...</span>
+                                </div>
+                                <p class="mt-3 text-muted">در حال بارگیری فیلدهای مورد نیاز...</p>
+                            </div>
+                        </div>
+
+                        <!-- دکمه ارسال -->
+                        <div class="col-12">
+                            <button type="submit" class="btn btn-success btn-lg w-100 py-3">
+                                <i class="bi bi-file-medical me-2"></i>
+                                انجام تشخیص
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% block scripts %}
+<script>
+document.getElementById('model-select').addEventListener('change', function() {
+    const modelId = this.value;
+    const loadingHTML = `
+        <div class="text-center my-5 py-3">
+            <div class="spinner-border text-primary" style="width: 3rem; height: 3rem;" role="status">
+                <span class="visually-hidden">در حال بارگیری...</span>
+            </div>
+            <p class="mt-3 text-muted">در حال بارگیری فیلدهای مورد نیاز...</p>
+        </div>`;
+    
+    document.getElementById('input-fields').innerHTML = loadingHTML;
+    
+    fetch(`/get-fields?model_id=${modelId}`)
+        .then(response => {
+            if (!response.ok) throw new Error('خطا در دریافت فیلدها');
+            return response.text();
+        })
+        .then(html => {
+            document.getElementById('input-fields').innerHTML = html;
+        })
+        .catch(error => {
+            document.getElementById('input-fields').innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="bi bi-exclamation-octagon me-2"></i>
+                    ${error.message}
+                </div>`;
+        });
+});
+</script>
+{% endblock %}
+{% endblock %}
