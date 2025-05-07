@@ -1,7 +1,14 @@
 from flask import Flask, render_template, request, redirect, url_for
+from flask import Response
 from diabetes_heart_breast import *
+import sys
+import locale
 import os
 import joblib
+
+sys.stdout.reconfigure(encoding='utf-8')
+sys.stderr.reconfigure(encoding='utf-8')
+locale.setlocale(locale.LC_ALL, 'en_US.UTF-8')
 
 app = Flask(__name__)
 app.secret_key = 'supersecretkey'
@@ -106,7 +113,10 @@ def get_model_status():
 
 @app.route('/')
 def home():
-    return render_template('train.html', models=get_model_status())
+    return Response(
+        render_template('train.html', models=get_model_status()),
+        content_type='text/html; charset=utf-8'
+    )
 
 @app.route('/train', methods=['POST'])
 def train_model():
